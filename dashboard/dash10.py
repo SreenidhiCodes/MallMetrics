@@ -106,27 +106,114 @@ if mode == "Mode 1":
     ]
 
     # KPIs
-    st.subheader("📊 Store Overview")
+st.subheader("📊 Store Overview")
 
-    c1, c2, c3 = st.columns(3)
+c1, c2, c3 = st.columns(3)
 
-    footfall = filtered_df["customer_id"].nunique()
-    sales = filtered_df["purchase"].sum()
-    conversion = (sales / footfall * 100) if footfall > 0 else 0
+footfall = filtered_df["customer_id"].nunique()
+sales = filtered_df["purchase"].sum()
+conversion = (sales / footfall * 100) if footfall > 0 else 0
 
-    c1.metric("👥 Footfall", footfall)
-    c2.metric("💰 Sales", int(sales))
-    c3.metric("📈 Conversion %", round(conversion, 1))
+c1.metric("👥 Footfall", footfall)
+c2.metric("💰 Sales", int(sales))
+c3.metric("📈 Conversion %", round(conversion,1))
 
-    # HEATMAP
-    st.subheader("🔥 Shelf Traffic Heatmap")
-    fig_heat = generate_shelf_heatmap(filtered_df.values.tolist())
-    st.pyplot(fig_heat)
+# DOOR ANALYSIS
+st.subheader("🚪 Door-wise Analysis")
 
-    # MOVEMENT
-    st.subheader("🚶 Customer Movement")
+if not filtered_df.empty:
 
-    fig = px.scatter(
+    door_perf = filtered_df.groupby("door").agg({
+        "customer_id": "nunique",
+        "purchase": "sum"
+    }).reset_index()
+
+    door_perf["conversion_rate"] = (
+        door_perf["purchase"] / door_perf["customer_id"] * 100
+    ).round(1)
+
+    # 🎨 ALTERNATING COLORS
+    colors = ["#1f77b4", "#aec7e8"]  # dark blue & light blue
+    bar_colors = [colors[i % 2] for i in range(len(door_perf))]
+
+    fig1 = go.Figure()
+
+    fig1.add_trace(go.Bar(
+        x=door_perf["door"],
+        y=door_perf["customer_id"],
+        text=door_perf["customer_id"],
+        textposition='auto',
+        marker_color=bar_colors
+    ))
+
+    fig1.update_layout(title="Footfall per Door")
+    st.plotly_chart(fig1, use_container_width=True)
+
+    # Conversion line
+    fig2 = px.line(
+        door_perf,
+        x="door",
+        y="conversion_rate",
+        markers=True,
+        title="Conversion Rate per Door (%)"
+    )
+    st.plotly_chart(fig2, use_container_width=True)
+
+else:
+    st.warning("No door data available")
+
+# STORE PERFORMANCE
+
+st.subheader("📈 Store Performance Trend")
+
+perf_df = pd.DataFrame({
+    "Metric": ["Footfall", "Sales", "Conversion %"],
+    "Value": [footfall, sales, round(conversion,1)]
+})
+
+fig_line = px.line(perf_df, x="Metric", y="Value", markers=True)
+st.plotly_chart(fig_line, use_container_width=True)
+# HEATMAP
+
+st.subheader("🔥 Shelf Traffic Heatmap")
+
+fig_heat = generate_shelf_heatmap(filtered_df.values.tolist())
+st.pyplot(fig_heat)
+
+
+# INSIGHTS
+st.subheader("🧠 Insights")
+
+if not filtered_df.empty:
+
+    top_zone = filtered_df["shelf"].value_counts().idxmax()
+    low_sales = filtered_df.groupby("shelf")["purchase"].sum().idxmin()
+    avg_dwell = filtered_df["dwell_time"].mean()
+
+    st.success(f"🔥 High Traffic Shelf: {top_zone}")
+    st.warning(f"📉 Low Sales Shelf: {low_sales}")
+
+    st.markdown("### 💡 Suggestions")
+    st.info("1️⃣ Improve product placement in high traffic shelf")
+    st.info("2️⃣ Add offers/discounts to low sales shelf")
+
+    if avg_dwell > 4:
+        st.info("3️⃣ High dwell time but low purchase → pricing issue")
+    else:
+        st.info("3️⃣ Customers move fast → improve engagement")
+
+
+# MOVEMENT
+
+st.subheader("🚶 Customer Movement Intelligence")
+
+if not filtered_df.empty:
+
+    filtered_df = filtered_df.sort_values(["customer_id", "id"])
+
+    st.markdown("### 🎯 Customer Behavior")
+
+    fig_scatter = px.scatter(
         filtered_df,
         x="x",
         y="y",
@@ -135,34 +222,104 @@ if mode == "Mode 1":
         hover_data=["customer_id", "shelf"]
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    # ✅ ADD AXIS LABELS HERE ALSO (extra polish)
+    fig_scatter.update_layout(
+        xaxis_title="Store Width",
+        yaxis_title="Store Height",
+        template="plotly_white"
+    )
 
-    # SUSPECT PATH
-    if not sus_df.empty:
-        st.subheader("🚨 Suspect Tracking")
+    st.plotly_chart(fig_scatter, use_container_width=True)
 
-        fig2 = go.Figure()
+    st.markdown("### 🧭  Customer Movement Path")
 
-        for cid, group in filtered_df.groupby("customer_id"):
-            group = group.sort_values("id")
+    fig_path = go.Figure()
 
-            color = "red" if cid in sus_df["Customer ID"].values else "gray"
+    for cid, group in filtered_df.groupby("customer_id"):
+        group = group.sort_values("id")
 
-            fig2.add_trace(go.Scatter(
-                x=group["x"],
-                y=group["y"],
-                mode="lines+markers",
-                line=dict(color=color)
-            ))
+        fig_path.add_trace(go.Scatter(
+            x=group["x"],
+            y=group["y"],
+            mode="lines+markers",
+            showlegend=False
+        ))
 
-        st.plotly_chart(fig2, use_container_width=True)
+    # ✅ MAIN FIX: Axis labels + styling
+    fig_path.update_layout(
+        title="Customer Movement Path",
+        xaxis_title="Store Width",
+        yaxis_title="Store Height",
+        template="plotly_white"
+    )
 
-    # INSIGHTS
-    st.subheader("🧠 Insights")
+    st.plotly_chart(fig_path, use_container_width=True)
 
-    top_zone = filtered_df["shelf"].value_counts().idxmax()
-    st.success(f"🔥 High Traffic Shelf: {top_zone}")
+# 🔴 ADD HERE ↓↓↓
+# 🔴 Suspect Movement Highlight
+if not sus_df.empty:
 
+    st.markdown("### 🔴 Suspect Movement Tracking")
+
+    fig_alert = go.Figure()
+
+    for cid, group in filtered_df.groupby("customer_id"):
+        group = group.sort_values("id")
+
+        color = "red" if cid in sus_df["Customer ID"].values else "lightgray"
+
+        fig_alert.add_trace(go.Scatter(
+            x=group["x"],
+            y=group["y"],
+            mode="lines+markers",
+            line=dict(color=color, width=3 if color=="red" else 1),
+            showlegend=False
+        ))
+
+    fig_alert.update_layout(
+        title="Suspect Movement Path",
+        xaxis_title="Store Width",
+        yaxis_title="Store Height",
+        template="plotly_white"
+    )
+
+    st.plotly_chart(fig_alert, use_container_width=True)
+
+else:
+    st.warning("No movement data available")
+
+
+# SHELF SALES
+
+st.subheader("📊 Shelf-wise Sales")
+
+if not filtered_df.empty:
+
+    shelf_perf = filtered_df.groupby("shelf")["purchase"].sum().reset_index()
+
+    fig_area = px.area(shelf_perf, x="shelf", y="purchase")
+    st.plotly_chart(fig_area, use_container_width=True)
+
+
+# ALERTS
+st.subheader("🚨 Suspicious Customers")
+
+if sus_df.empty:
+    st.success("✅ No suspicious activity detected")
+
+else:
+    # 🔥 MAIN ALERT
+    main_sus = sus_df.iloc[0]
+
+    st.markdown(f"""
+    ### ⚠️ Suspect Identified
+    - **Customer ID:** {main_sus['Customer ID']}
+    - **Brand:** {main_sus['Brand']}
+    - **Shelf:** {main_sus['Shelf']}
+    """)
+
+    st.markdown("### 📋 All Suspects")
+    st.dataframe(sus_df)
 # =========================================================
 # 🔵 MODE 2
 # =========================================================
