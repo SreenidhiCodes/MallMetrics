@@ -4,16 +4,13 @@ streamlit==1.36.0
 # ================= DATA =================
 pandas==2.2.2
 numpy==1.26.4
-scipy==1.13.1
 
 # ================= VISUALIZATION =================
 plotly==5.22.0
 matplotlib==3.9.0
-seaborn==0.13.2
 
 # ================= COMPUTER VISION =================
 opencv-python==4.10.0.84
-Pillow==10.4.0
 
 # ================= AI / ML =================
 ultralytics==8.2.0
@@ -24,33 +21,4 @@ torchvision>=0.16.0
 tqdm==4.66.4
 
 # ================= DATABASE =================
-# sqlite3 is built-in (no install needed)
 sqlalchemy==2.0.32
-
-# ================= PERFORMANCE / SCALING =================
-joblib==1.4.2
-psutil==6.0.0
-
-# ================= API / BACKEND (future SaaS) =================
-fastapi==0.112.0
-uvicorn==0.30.5
-
-# ================= AUTH (future login system) =================
-streamlit-authenticator==0.3.2
-
-# ================= STREAMING (future live video) =================
-streamlit-webrtc==0.47.0
-
-# ================= HTTP / INTEGRATIONS =================
-requests==2.32.3
-httpx==0.27.0
-
-# ================= ENV / CONFIG =================
-python-dotenv==1.0.1
-
-# ================= OPTIONAL ADVANCED =================
-loguru==0.7.2
-rich==13.7.1
-
-# ================= MODEL EXPORT / OPTIMIZATION =================
-onnxruntime==1.18.0
