@@ -221,6 +221,72 @@ if mode == "Mode 1":
 
         st.plotly_chart(fig_scatter, use_container_width=True)
 
+        # PATH
+        fig_path = go.Figure()
+
+        for cid, group in filtered_df.groupby("customer_id"):
+            group = group.sort_values("id")
+
+            fig_path.add_trace(go.Scatter(
+                x=group["x"],
+                y=group["y"],
+                mode="lines+markers",
+                showlegend=False
+            ))
+
+        fig_path.update_layout(
+            title="Customer Movement Path",
+            xaxis_title="Store Width",
+            yaxis_title="Store Height"
+        )
+
+        st.plotly_chart(fig_path, use_container_width=True)
+
+    # SUSPECT TRACKING
+    if not sus_df.empty:
+
+        st.markdown("### 🔴 Suspect Movement Tracking")
+
+        fig_alert = go.Figure()
+
+        for cid, group in filtered_df.groupby("customer_id"):
+            group = group.sort_values("id")
+
+            color = "red" if cid in sus_df["Customer ID"].values else "gray"
+
+            fig_alert.add_trace(go.Scatter(
+                x=group["x"],
+                y=group["y"],
+                mode="lines+markers",
+                line=dict(color=color, width=3 if color=="red" else 1),
+                showlegend=False
+            ))
+
+        st.plotly_chart(fig_alert, use_container_width=True)
+
+    # SHELF SALES
+    st.subheader("📊 Shelf-wise Sales")
+
+    shelf_perf = filtered_df.groupby("shelf")["purchase"].sum().reset_index()
+    fig_area = px.area(shelf_perf, x="shelf", y="purchase")
+    st.plotly_chart(fig_area, use_container_width=True)
+
+    # ALERTS
+    st.subheader("🚨 Suspicious Customers")
+
+    if sus_df.empty:
+        st.success("✅ No suspicious activity detected")
+    else:
+        main_sus = sus_df.iloc[0]
+
+        st.markdown(f"""
+        ### ⚠️ Suspect Identified
+        - Customer ID: {main_sus['Customer ID']}
+        - Brand: {main_sus['Brand']}
+        - Shelf: {main_sus['Shelf']}
+        """)
+
+        st.dataframe(sus_df)
 # =========================================================
 # 🔵 MODE 2
 # =========================================================
@@ -238,6 +304,7 @@ if mode == "Mode 2":
         "customer_id","zone_row","zone_col","dwell_time","x","y"
     ])
 
+    # KPIs
     st.subheader("📊 Store Overview")
 
     c1, c2, c3 = st.columns(3)
@@ -246,34 +313,137 @@ if mode == "Mode 2":
     c2.metric("📍 Visits", len(df))
     c3.metric("⏱ Avg Dwell", round(df["dwell_time"].mean(), 2))
 
+    # =========================
+    # 🧠 ZONE GRID HEATMAP
+    # =========================
     st.subheader("🧠 Unified Zone Map")
 
     fig = go.Figure()
     GRID = 6
 
+    # Draw grid
     for i in range(GRID + 1):
         fig.add_shape(type="line", x0=0, x1=GRID, y0=i, y1=i)
         fig.add_shape(type="line", x0=i, x1=i, y0=0, y1=GRID)
 
+    # Density
     density = df.groupby(["zone_row","zone_col"]).size().reset_index(name="visits")
+
     df2 = df.merge(density, on=["zone_row","zone_col"])
 
-    def color(d):
-        if d < 2:
+    # Color logic
+    def get_color(visits):
+        if visits < 5:
             return "green"
-        elif d < 5:
+        elif visits < 15:
             return "orange"
         else:
             return "red"
 
+    # Plot
     fig.add_trace(go.Scatter(
         x=df2["zone_col"],
         y=df2["zone_row"],
         mode="markers",
         marker=dict(
-            size=(df2["visits"]/df2["visits"].max())*25+5,
-            color=df2["dwell_time"].apply(color)
-        )
+            size=(df2["visits"]/df2["visits"].max())*30 + 5,
+            color=df2["visits"].apply(get_color)
+        ),
+        text=df2["visits"],
+        hovertemplate="Visits: %{text}"
     ))
 
+    # =========================
+    # 🔴 RISK ZONES
+    # =========================
+    for _, row in density.iterrows():
+
+        r = row["zone_row"]
+        c = row["zone_col"]
+        visits = row["visits"]
+
+        avg_d = df[
+            (df["zone_row"] == r) &
+            (df["zone_col"] == c)
+        ]["dwell_time"].mean()
+
+        # Crowded fast movement → theft risk
+        if visits > 20 and avg_d < 2:
+            fig.add_shape(
+                type="rect",
+                x0=c-0.5, x1=c+0.5,
+                y0=r-0.5, y1=r+0.5,
+                line=dict(color="red", width=3)
+            )
+
+        # Low traffic but high dwell → hidden zone
+        elif visits < 5 and avg_d > 5:
+            fig.add_shape(
+                type="rect",
+                x0=c-0.5, x1=c+0.5,
+                y0=r-0.5, y1=r+0.5,
+                line=dict(color="black", width=3)
+            )
+
+    fig.update_layout(
+        title="Zone Heatmap",
+        xaxis_title="Zone Column",
+        yaxis_title="Zone Row",
+        template="plotly_white"
+    )
+
     st.plotly_chart(fig, use_container_width=True)
+
+    # =========================
+    # 🚶 MOVEMENT
+    # =========================
+    st.subheader("🚶 Movement Pattern")
+
+    fig2 = px.scatter(
+        df,
+        x="x",
+        y="y",
+        size="dwell_time",
+        hover_data=["customer_id"]
+    )
+
+    fig2.update_layout(
+        xaxis_title="Store Width",
+        yaxis_title="Store Height"
+    )
+
+    st.plotly_chart(fig2, use_container_width=True)
+
+    # =========================
+    # 🧠 INSIGHTS
+    # =========================
+    st.subheader("🧠 Insights")
+
+    top = density.sort_values("visits", ascending=False).iloc[0]
+    st.success(f"🔥 Top Zone: ({top['zone_row']},{top['zone_col']})")
+
+    st.markdown("### 🚨 Risk Zones")
+
+    for _, r in density.iterrows():
+
+        visits = r["visits"]
+
+        avg_d = df[
+            (df["zone_row"] == r["zone_row"]) &
+            (df["zone_col"] == r["zone_col"])
+        ]["dwell_time"].mean()
+
+        if visits > 20 and avg_d < 2:
+            st.warning(f"Zone ({r['zone_row']},{r['zone_col']}) → Crowded Theft Risk")
+
+        elif visits < 5 and avg_d > 5:
+            st.warning(f"Zone ({r['zone_row']},{r['zone_col']}) → Hidden Risk")
+
+    # =========================
+    # 💡 SUGGESTIONS
+    # =========================
+    st.markdown("### 💡 Suggestions")
+
+    st.info("1️⃣ Add staff in high traffic zones")
+    st.info("2️⃣ Improve surveillance in risky areas")
+    st.info("3️⃣ Optimize layout for better flow")
